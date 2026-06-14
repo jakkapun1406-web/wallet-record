@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WealthyAI - บันทึกรายรับรายจ่าย & ผู้ช่วย AI วิเคราะห์การเงิน</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar for Desktop / Bottom Bar for Mobile -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">
+                    <i data-lucide="wallet" class="neon-glow"></i>
+                </div>
+                <h2>Wealthy<span>AI</span></h2>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>แดชบอร์ด</span>
+                </button>
+                <button class="nav-item" data-target="transactions">
+                    <i data-lucide="arrow-left-right"></i>
+                    <span>บันทึกรายการ</span>
+                </button>
+                <button class="nav-item" data-target="analytics">
+                    <i data-lucide="line-chart"></i>
+                    <span>วิเคราะห์รายเดือน/ปี</span>
+                </button>
+                <button class="nav-item" data-target="ai-advisor">
+                    <i data-lucide="sparkles" class="ai-sparkle-icon"></i>
+                    <span>AI น้องถุงเงิน</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <p>เวอร์ชัน 1.0.0</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h1 id="page-title">แดชบอร์ดภาพรวม</h1>
+                    <p id="page-subtitle">ยินดีต้อนรับกลับมา! นี่คือสรุปทางการเงินของคุณ</p>
+                </div>
+                <div class="header-actions">
+                    <select id="currency-selector" class="currency-select-btn">
+                        <option value="JPY">JPY</option>
+                        <option value="THB">THB</option>
+                    </select>
+                    <button id="clear-all-btn" class="btn btn-secondary text-danger">
+                        <i data-lucide="trash-2"></i>
+                        <span>ล้างข้อมูลทั้งหมด</span>
+                    </button>
+                    <button id="export-data-btn" class="btn btn-secondary">
+                        <i data-lucide="download"></i>
+                        <span>ส่งออกข้อมูล</span>
+                    </button>
+                    <button id="import-data-btn" class="btn btn-secondary">
+                        <i data-lucide="upload"></i>
+                        <span>นำเข้าข้อมูล</span>
+                    </button>
+                    <input type="file" id="import-file" style="display: none;" accept=".json">
+                </div>
+            </header>
+
+            <!-- Views -->
+            <div class="view-container">
+                
+                <!-- VIEW 1: DASHBOARD -->
+                <section id="view-dashboard" class="app-view active">
+                    <!-- Status Cards Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card balance">
+                            <div class="card-header">
+                                <span>ยอดรวมคงเหลือ</span>
+                                <button id="open-settings-btn" class="btn-icon" title="ตั้งค่าเงินเริ่มต้น" style="padding: 2px;">
+                                    <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="total-balance" style="font-size: 1.8rem; margin-bottom: 0.5rem;">฿0.00</h3>
+                                <div class="balance-breakdown" style="display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 0.5rem;">
+                                    <div class="breakdown-item" style="display: flex; justify-content: space-between; color: var(--text-secondary);">
+                                        <span style="display: inline-flex; align-items: center; gap: 0.3rem;"><i data-lucide="wallet" style="width: 12px; height: 12px;"></i> เงินสด:</span>
+                                        <strong id="cash-balance" style="color: var(--text-primary); font-family: var(--font-eng);">฿0.00</strong>
+                                    </div>
+                                    <div class="breakdown-item" style="display: flex; justify-content: space-between; color: var(--text-secondary);">
+                                        <span style="display: inline-flex; align-items: center; gap: 0.3rem;"><i data-lucide="credit-card" style="width: 12px; height: 12px;"></i> ในบัญชี:</span>
+                                        <strong id="bank-balance" style="color: var(--text-primary); font-family: var(--font-eng);">฿0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card income">
+                            <div class="card-header">
+                                <span>รายรับเดือนนี้</span>
+                                <div class="icon-box"><i data-lucide="trending-up"></i></div>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="month-income">฿0.00</h3>
+                                <p class="sub-text text-success" id="income-change"><i data-lucide="arrow-up-right"></i> 0% เทียบกับเดือนก่อน</p>
+                            </div>
+                        </div>
+                        <div class="stat-card expense">
+                            <div class="card-header">
+                                <span>รายจ่ายเดือนนี้</span>
+                                <div class="icon-box"><i data-lucide="trending-down"></i></div>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="month-expense">฿0.00</h3>
+                                <p class="sub-text text-danger" id="expense-change"><i data-lucide="arrow-down-left"></i> 0% เทียบกับเดือนก่อน</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Dashboard Content Grid -->
+                    <div class="dashboard-grid">
+                        <!-- Left: Charts -->
+                        <div class="grid-col charts-col">
+                            <div class="glass-card">
+                                <div class="card-title-bar">
+                                    <h3>สัดส่วนรายจ่ายแยกตามหมวดหมู่</h3>
+                                </div>
+                                <div class="chart-wrapper">
+                                    <canvas id="categoryChart"></canvas>
+                                    <div id="category-chart-empty" class="chart-empty-state">
+                                        <i data-lucide="pie-chart"></i>
+                                        <p>ยังไม่มีข้อมูลรายจ่ายในเดือนนี้</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Quick AI Insight & Recent Transactions -->
+                        <div class="grid-col sidebar-col">
+                            <!-- Quick AI Advisor widget -->
+                            <div class="glass-card ai-summary-widget">
+                                <div class="card-title-bar">
+                                    <div class="title-with-icon">
+                                        <i data-lucide="sparkles" class="text-ai"></i>
+                                        <h3>วิเคราะห์ด่วนโดย AI</h3>
+                                    </div>
+                                    <button class="text-btn" id="go-to-ai-btn">คุยกับ AI</button>
+                                </div>
+                                <div class="ai-widget-content">
+                                    <div class="ai-avatar-mini">
+                                        <div class="avatar-glow"></div>
+                                        <span>🤖</span>
+                                    </div>
+                                    <div class="ai-speech-bubble">
+                                        <p id="ai-quick-insight">กำลังคำนวณข้อมูลการเงินของคุณ...</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Add Form -->
+                            <div class="glass-card">
+                                <div class="card-title-bar">
+                                    <h3>บันทึกด่วน</h3>
+                                </div>
+                                <form id="quick-add-form" class="compact-form">
+                                    <div class="form-row-two">
+                                        <div class="form-group">
+                                            <label for="quick-type">ประเภท</label>
+                                            <select id="quick-type" required>
+                                                <option value="expense">รายจ่าย (-) </option>
+                                                <option value="income">รายรับ (+)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="quick-category">หมวดหมู่</label>
+                                            <select id="quick-category" required>
+                                                <!-- Dynamic Categories based on Type -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row-two">
+                                        <div class="form-group">
+                                            <label for="quick-amount">จำนวนเงิน</label>
+                                            <input type="number" id="quick-amount" placeholder="0.00" min="0.01" step="any" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="quick-date">วันที่</label>
+                                            <input type="date" id="quick-date" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="quick-wallet">ช่องทางการเงิน</label>
+                                        <select id="quick-wallet" required>
+                                            <option value="bank">🏦 บัญชีธนาคาร</option>
+                                            <option value="cash">💵 เงินสด</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-full">
+                                        <i data-lucide="plus"></i> บันทึกรายการ
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions list -->
+                    <div class="glass-card table-card">
+                        <div class="card-title-bar">
+                            <h3>รายการล่าสุด</h3>
+                            <button class="text-btn" id="view-all-trans-btn">ดูรายการทั้งหมด</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="transaction-table">
+                                <thead>
+                                    <tr>
+                                        <th>วันที่</th>
+                                        <th>ประเภท</th>
+                                        <th>ช่องทาง</th>
+                                        <th>หมวดหมู่</th>
+                                        <th>คำอธิบาย</th>
+                                        <th class="text-right">จำนวนเงิน</th>
+                                        <th class="text-center">จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-transactions-tbody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                            <div id="recent-empty-state" class="empty-state">
+                                <i data-lucide="inbox"></i>
+                                <p>ยังไม่มีรายการบันทึก</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 2: TRANSACTIONS (FULL LIST & FILTER) -->
+                <section id="view-transactions" class="app-view">
+                    <div class="transactions-layout">
+                        <!-- Add Form -->
+                        <div class="glass-card form-container-card">
+                            <div class="card-title-bar">
+                                <h3>ฟอร์มบันทึกรายรับรายจ่าย</h3>
+                            </div>
+                            <form id="full-add-form">
+                                <div class="form-group">
+                                    <label>ประเภทรายการ</label>
+                                    <div class="type-selector-buttons">
+                                        <button type="button" class="type-btn expense active" data-type="expense">
+                                            <i data-lucide="trending-down"></i> รายจ่าย
+                                        </button>
+                                        <button type="button" class="type-btn income" data-type="income">
+                                            <i data-lucide="trending-up"></i> รายรับ
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="full-amount">จำนวนเงิน (บาท)</label>
+                                        <input type="number" id="full-amount" placeholder="0.00" min="0.01" step="any" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="full-date">วันที่ทำรายการ</label>
+                                        <input type="date" id="full-date" required>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="full-category">หมวดหมู่</label>
+                                        <select id="full-category" required>
+                                            <!-- Dynamic options -->
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="full-wallet">ช่องทางการเงิน</label>
+                                        <select id="full-wallet" required>
+                                            <option value="bank">🏦 บัญชีธนาคาร</option>
+                                            <option value="cash">💵 เงินสด</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-top: 0.5rem;">
+                                    <label for="full-desc">บันทึกช่วยจำ (ไม่บังคับ)</label>
+                                    <input type="text" id="full-desc" placeholder="เช่น ค่าข้าวเที่ยง, เงินเดือนออก">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-full">
+                                    <i data-lucide="save"></i> บันทึกข้อมูล
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Filter & Full History List -->
+                        <div class="glass-card list-container-card">
+                            <div class="card-title-bar filter-bar">
+                                <h3>รายการเดินบัญชีทั้งหมด</h3>
+                                <div class="filter-controls">
+                                    <div class="search-box">
+                                        <i data-lucide="search"></i>
+                                        <input type="text" id="search-input" placeholder="ค้นหาบันทึก...">
+                                    </div>
+                                    <select id="filter-type">
+                                        <option value="all">ทุกประเภท</option>
+                                        <option value="income">เฉพาะรายรับ</option>
+                                        <option value="expense">เฉพาะรายจ่าย</option>
+                                    </select>
+                                    <select id="filter-category">
+                                        <option value="all">ทุกหมวดหมู่</option>
+                                        <!-- Dynamic options -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="table-responsive full-table-height">
+                                <table class="transaction-table">
+                                    <thead>
+                                        <tr>
+                                            <th>วันที่</th>
+                                            <th>ประเภท</th>
+                                            <th>ช่องทาง</th>
+                                            <th>หมวดหมู่</th>
+                                            <th>บันทึกช่วยจำ</th>
+                                            <th class="text-right">จำนวนเงิน</th>
+                                            <th class="text-center">จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="all-transactions-tbody">
+                                        <!-- Dynamic Rows -->
+                                    </tbody>
+                                </table>
+                                <div id="full-empty-state" class="empty-state">
+                                    <i data-lucide="search-code"></i>
+                                    <p>ไม่พบรายการที่ตรงตามตัวกรอง</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 3: ANALYTICS (MONTHLY / YEARLY) -->
+                <section id="view-analytics" class="app-view">
+                    <!-- Selector Bar -->
+                    <div class="analytics-filter-bar glass-card">
+                        <div class="selector-group">
+                            <label for="analytics-view-mode">มุมมอง:</label>
+                            <div class="segmented-control">
+                                <button class="segment-btn active" data-mode="monthly">รายเดือน</button>
+                                <button class="segment-btn" data-mode="yearly">รายปี</button>
+                            </div>
+                        </div>
+
+                        <div class="selector-group" id="month-select-group">
+                            <label for="analytics-month">เลือกเดือน:</label>
+                            <input type="month" id="analytics-month">
+                        </div>
+
+                        <div class="selector-group hide" id="year-select-group">
+                            <label for="analytics-year">เลือกปี:</label>
+                            <select id="analytics-year">
+                                <!-- Dynamic Years -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Monthly Report View -->
+                    <div id="monthly-report-section" class="analytics-content-section">
+                        <div class="analytics-grid">
+                            <!-- Left Card: Monthly Overview Info -->
+                            <div class="glass-card">
+                                <div class="card-title-bar">
+                                    <h3 id="monthly-report-title">สรุปผลยอดรายเดือน</h3>
+                                </div>
+                                <div class="analytics-stat-boxes">
+                                    <div class="analytics-stat-box">
+                                        <span class="label">รายรับเดือนนี้</span>
+                                        <span class="value text-success" id="anal-month-income">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">รายจ่ายเดือนนี้</span>
+                                        <span class="value text-danger" id="anal-month-expense">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">เงินออมสุทธิ</span>
+                                        <span class="value text-primary" id="anal-month-savings">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">อัตราการออม</span>
+                                        <span class="value" id="anal-month-savings-rate">0%</span>
+                                    </div>
+                                </div>
+                                <div class="savings-progress-wrapper">
+                                    <div class="progress-info">
+                                        <span>ความสำเร็จเป้าหมายการออม (เป้าหมาย 30%)</span>
+                                        <span id="savings-progress-percent">0%</span>
+                                    </div>
+                                    <div class="progress-bar-bg">
+                                        <div class="progress-bar-fill" id="savings-progress-bar" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Card: Category Bar list -->
+                            <div class="glass-card">
+                                <div class="card-title-bar">
+                                    <h3>รายละเอียดค่าใช้จ่ายจำแนกรายกลุ่ม</h3>
+                                </div>
+                                <div class="category-breakdown-list" id="monthly-category-list">
+                                    <!-- Dynamic category list items with progress bars -->
+                                </div>
+                                <div id="monthly-cat-empty" class="empty-state">
+                                    <i data-lucide="activity"></i>
+                                    <p>ไม่มีข้อมูลค่าใช้จ่ายในเดือนนี้</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Yearly Report View -->
+                    <div id="yearly-report-section" class="analytics-content-section hide">
+                        <div class="analytics-grid-yearly">
+                            <!-- Graph Overview -->
+                            <div class="glass-card yearly-chart-card">
+                                <div class="card-title-bar">
+                                    <h3 id="yearly-report-title-text">รายงานเปรียบเทียบรายเดือนของปี</h3>
+                                </div>
+                                <div class="chart-wrapper-large">
+                                    <canvas id="yearlyChart"></canvas>
+                                    <div id="yearly-chart-empty" class="chart-empty-state">
+                                        <i data-lucide="bar-chart-3"></i>
+                                        <p>ยังไม่มีข้อมูลบันทึกในปีนี้</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Yearly Statistics Column -->
+                            <div class="glass-card">
+                                <div class="card-title-bar">
+                                    <h3>ตัวเลขสรุปรายปี</h3>
+                                </div>
+                                <div class="analytics-stat-boxes yearly-stats">
+                                    <div class="analytics-stat-box">
+                                        <span class="label">รายรับสะสมรายปี</span>
+                                        <span class="value text-success" id="anal-year-income">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">รายจ่ายสะสมรายปี</span>
+                                        <span class="value text-danger" id="anal-year-expense">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">เงินออมสะสมรวม</span>
+                                        <span class="value text-primary" id="anal-year-savings">฿0.00</span>
+                                    </div>
+                                    <div class="analytics-stat-box">
+                                        <span class="label">เฉลี่ยรายจ่ายต่อเดือน</span>
+                                        <span class="value" id="anal-year-avg-expense">฿0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 4: AI FINANCIAL ADVISOR -->
+                <section id="view-ai-advisor" class="app-view">
+                    <div class="ai-advisor-layout">
+                        <!-- Left Panel: Smart Insights Board -->
+                        <div class="ai-insights-panel">
+                            <div class="glass-card ai-welcome-card">
+                                <div class="ai-robot-icon">🤖</div>
+                                <div class="ai-intro">
+                                    <h3>สวัสดีค่ะ! ฉันคือ "AI น้องถุงเงิน"</h3>
+                                    <p>ฉันจะคอยช่วยวิเคราะห์ข้อมูลการเงินของคุณเพื่อเสนอทางเลือกที่ดีที่สุดในการออมเงิน ปรับลดค่าใช้จ่าย และวางแผนสู่อิสรภาพทางการเงินค่ะ</p>
+                                </div>
+                            </div>
+
+                            <!-- Insights Feed -->
+                            <div class="insights-feed-title">
+                                <i data-lucide="award"></i>
+                                <h4>สรุปรายงานทางการเงินปัจจุบัน</h4>
+                            </div>
+                            <div class="insights-container" id="ai-insights-list">
+                                <!-- Dynamic Insights Cards -->
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Chat Room Interface -->
+                        <div class="glass-card ai-chat-card">
+                            <div class="chat-header">
+                                <div class="ai-status-indicator">
+                                    <div class="status-dot pulsing"></div>
+                                    <span>AI น้องถุงเงิน (กำลังออนไลน์)</span>
+                                </div>
+                                <button class="btn btn-icon" id="clear-chat-btn" title="ล้างการสนทนา">
+                                    <i data-lucide="trash-2"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="chat-messages-area" id="chat-messages">
+                                <!-- Initial AI Message -->
+                                <div class="message ai-msg">
+                                    <div class="msg-avatar">🤖</div>
+                                    <div class="msg-content">
+                                        <p>สวัสดีค่ะ วันนี้ต้องการให้ถุงเงินช่วยวิเคราะห์ข้อมูล หรือแนะนำเคล็ดลับการเงินในส่วนใดดีคะ? แตะที่คำถามสำเร็จรูปด้านล่างเพื่อเริ่มคุยได้เลยค่ะ</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Predefined Quick Queries -->
+                            <div class="quick-queries-container">
+                                <button class="quick-query-btn" data-query="summary">📊 วิเคราะห์ภาพรวมเดือนนี้</button>
+                                <button class="quick-query-btn" data-query="waste">⚠️ จุดที่ใช้เงินสิ้นเปลืองที่สุด</button>
+                                <button class="quick-query-btn" data-query="tips">💡 ขอเคล็ดลับเพิ่มเงินเก็บ</button>
+                                <button class="quick-query-btn" data-query="budget">📌 ตรวจสอบเป้าหมาย 50/30/20</button>
+                            </div>
+
+                            <!-- Input Box -->
+                            <form id="chat-input-form" class="chat-input-bar">
+                                <input type="text" id="chat-input" placeholder="พิมพ์ข้อความถาม น้องถุงเงิน ที่นี่..." autocomplete="off">
+                                <button type="submit" class="btn btn-primary btn-icon-only">
+                                    <i data-lucide="send"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hide">
+        <i data-lucide="check-circle" id="toast-icon"></i>
+        <span id="toast-message">บันทึกสำเร็จ</span>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hide">
+        <div class="glass-card modal-content" style="max-width: 420px; width: 90%; margin: 15% auto;">
+            <div class="card-title-bar">
+                <h3>ตั้งค่าเงินเริ่มต้น</h3>
+                <button id="close-settings-btn" class="btn-icon" type="button">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="starting-balance-form">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="start-cash">💵 เงินสดเริ่มต้นปัจจุบัน</label>
+                    <input type="number" id="start-cash" min="0" step="any" placeholder="0.00" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="start-bank">🏦 เงินฝากเริ่มต้นในบัญชี/บัตร</label>
+                    <input type="number" id="start-bank" min="0" step="any" placeholder="0.00" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <i data-lucide="save"></i> บันทึกค่าเริ่มต้น
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Script -->
+    <script src="app.js"></script>
+</body>
+</html>
