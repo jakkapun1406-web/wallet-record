@@ -59,6 +59,10 @@
                     <p id="page-subtitle">ยินดีต้อนรับกลับมา! นี่คือสรุปทางการเงินของคุณ</p>
                 </div>
                 <div class="header-actions">
+                    <div id="sync-status-badge" class="sync-status offline" title="สถานะการซิงก์ Google Sheets">
+                        <span class="status-dot"></span>
+                        <span class="status-text">ออฟไลน์</span>
+                    </div>
                     <select id="currency-selector" class="currency-select-btn">
                         <option value="JPY">JPY</option>
                         <option value="THB">THB</option>
@@ -546,26 +550,60 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay hide">
-        <div class="glass-card modal-content" style="max-width: 420px; width: 90%; margin: 15% auto;">
+        <div class="glass-card modal-content" style="max-width: 460px; width: 95%; margin: 8% auto;">
             <div class="card-title-bar">
-                <h3>ตั้งค่าเงินเริ่มต้น</h3>
+                <h3>ตั้งค่าระบบ & การซิงก์ข้อมูล</h3>
                 <button id="close-settings-btn" class="btn-icon" type="button">
                     <i data-lucide="x"></i>
                 </button>
             </div>
-            <form id="starting-balance-form">
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label for="start-cash">💵 เงินสดเริ่มต้นปัจจุบัน</label>
-                    <input type="number" id="start-cash" min="0" step="any" placeholder="0.00" required>
+            
+            <div class="settings-section" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1.25rem; margin-bottom: 1.25rem;">
+                <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--color-primary);">💰 เงินออมเริ่มต้น</h4>
+                <form id="starting-balance-form">
+                    <div class="form-row-two" style="margin-bottom: 0.75rem;">
+                        <div class="form-group">
+                            <label for="start-cash" style="font-size: 0.8rem;">💵 เงินสดเริ่มต้น</label>
+                            <input type="number" id="start-cash" min="0" step="any" placeholder="0.00" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-bank" style="font-size: 0.8rem;">🏦 ในบัญชีเริ่มต้น</label>
+                            <input type="number" id="start-bank" min="0" step="any" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-secondary btn-full" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                        <i data-lucide="save"></i> บันทึกเงินเริ่มต้น
+                    </button>
+                </form>
+            </div>
+
+            <div class="settings-section">
+                <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: #10b981;">📊 ซิงก์ข้อมูล Google Sheets</h4>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="sheet-url" style="font-size: 0.8rem;">Google Apps Script Web App URL</label>
+                    <input type="url" id="sheet-url" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%;">
                 </div>
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label for="start-bank">🏦 เงินฝากเริ่มต้นในบัญชี/บัตร</label>
-                    <input type="number" id="start-bank" min="0" step="any" placeholder="0.00" required>
+                <div class="form-row-two" style="margin-bottom: 0.75rem;">
+                    <button id="save-sheet-url-btn" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">
+                        <i data-lucide="link"></i> เชื่อมต่อ URL
+                    </button>
+                    <button id="disconnect-sheet-btn" class="btn btn-secondary text-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;">
+                        <i data-lucide="link-2"></i> ยกเลิกเชื่อมต่อ
+                    </button>
                 </div>
-                <button type="submit" class="btn btn-primary btn-full">
-                    <i data-lucide="save"></i> บันทึกค่าเริ่มต้น
-                </button>
-            </form>
+                
+                <div id="sync-actions-group" class="hide" style="border-top: 1px solid rgba(255,255,255,0.03); padding-top: 0.75rem; margin-top: 0.75rem;">
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">จัดการทิศทางการเชื่อมต่อข้อมูล:</p>
+                    <div class="form-row-two">
+                        <button id="pull-sheet-btn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 0.75rem;" title="ดึงข้อมูลบน Google Sheet มาทับในเครื่อง">
+                            <i data-lucide="cloud-download"></i> ดึงจาก Sheets
+                        </button>
+                        <button id="push-sheet-btn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 0.75rem;" title="ส่งข้อมูลในเครื่องนี้ไปเขียนทับบน Google Sheet">
+                            <i data-lucide="cloud-upload"></i> ส่งไป Sheets
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

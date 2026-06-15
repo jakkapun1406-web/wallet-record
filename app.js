@@ -29,6 +29,8 @@ let yearlyChartInstance = null;
 let currentCurrency = 'JPY'; // Default currency
 let startingCash = 0;
 let startingBank = 0;
+let googleSheetUrl = ''; // Google Sheets Web App URL
+let syncStatus = 'offline'; // 'online' | 'syncing' | 'offline'
 
 // Mock Data for Initial Load (Using Year 2026 based on Current Metadata)
 const MOCK_TRANSACTIONS = [
@@ -84,6 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initial UI Render
     updateUI();
+
+    // Try automatic sync from Google Sheets on startup if URL exists
+    if (googleSheetUrl) {
+        pullFromGoogleSheet();
+    } else {
+        updateSyncStatus('offline');
+    }
 });
 
 // Helper: Get today's local date string YYYY-MM-DD
@@ -105,8 +114,12 @@ function initCurrency() {
     selector.addEventListener('change', (e) => {
         currentCurrency = e.target.value;
         localStorage.setItem('wealthy_ai_currency', currentCurrency);
+        saveData();
         updateUI();
         showToast(`เปลี่ยนสกุลเงินเป็น ${currentCurrency === 'JPY' ? 'เยน (¥)' : 'บาท (฿)'} สำเร็จแล้วค่ะ!`);
+        if (googleSheetUrl) {
+            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+        }
     });
 }
 
@@ -126,9 +139,35 @@ function setupSettingsModal() {
     const startCashInput = document.getElementById('start-cash');
     const startBankInput = document.getElementById('start-bank');
 
+    // Google Sheets elements
+    const sheetUrlInput = document.getElementById('sheet-url');
+    const saveUrlBtn = document.getElementById('save-sheet-url-btn');
+    const disconnectBtn = document.getElementById('disconnect-sheet-btn');
+    const syncActionsGroup = document.getElementById('sync-actions-group');
+    const pullBtn = document.getElementById('pull-sheet-btn');
+    const pushBtn = document.getElementById('push-sheet-btn');
+
+    // Update sync UI state inside modal
+    function updateModalSyncUI() {
+        if (googleSheetUrl) {
+            sheetUrlInput.value = googleSheetUrl;
+            sheetUrlInput.disabled = true;
+            saveUrlBtn.classList.add('hide');
+            disconnectBtn.classList.remove('hide');
+            syncActionsGroup.classList.remove('hide');
+        } else {
+            sheetUrlInput.value = '';
+            sheetUrlInput.disabled = false;
+            saveUrlBtn.classList.remove('hide');
+            disconnectBtn.classList.add('hide');
+            syncActionsGroup.classList.add('hide');
+        }
+    }
+
     openBtn.addEventListener('click', () => {
         startCashInput.value = startingCash;
         startBankInput.value = startingBank;
+        updateModalSyncUI();
         modal.classList.remove('hide');
     });
 
@@ -149,8 +188,51 @@ function setupSettingsModal() {
         
         saveData();
         updateUI();
+        
+        // Auto push starting balance if sync configured
+        if (googleSheetUrl) {
+            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+        }
+        
         modal.classList.add('hide');
         showToast('บันทึกเงินเริ่มต้นเรียบร้อยแล้วค่ะ!');
+    });
+
+    // Google Sheets action listeners
+    saveUrlBtn.addEventListener('click', () => {
+        const urlValue = sheetUrlInput.value.trim();
+        if (!urlValue) {
+            showToast('กรุณากรอก URL', 'error');
+            return;
+        }
+        if (!urlValue.startsWith('https://script.google.com/')) {
+            showToast('รูปแบบ URL ไม่ถูกต้อง (ต้องขึ้นต้นด้วย https://script.google.com/)', 'error');
+            return;
+        }
+
+        googleSheetUrl = urlValue;
+        saveData();
+        updateModalSyncUI();
+        showToast('เชื่อมต่อ URL และกำลังดึงข้อมูล...');
+        pullFromGoogleSheet(true);
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+        if (confirm('คุณต้องการยกเลิกการเชื่อมต่อกับ Google Sheets ใช่หรือไม่? (ข้อมูลในคอมพิวเตอร์จะไม่ถูกลบ)')) {
+            googleSheetUrl = '';
+            saveData();
+            updateModalSyncUI();
+            updateSyncStatus('offline');
+            showToast('ยกเลิกการเชื่อมต่อ Google Sheets แล้วค่ะ', 'error');
+        }
+    });
+
+    pullBtn.addEventListener('click', () => {
+        pullFromGoogleSheet(true);
+    });
+
+    pushBtn.addEventListener('click', () => {
+        pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank }, true);
     });
 }
 
@@ -236,12 +318,16 @@ function loadData() {
     // Load starting balances
     startingCash = parseFloat(localStorage.getItem('wealthy_ai_starting_cash')) || 0;
     startingBank = parseFloat(localStorage.getItem('wealthy_ai_starting_bank')) || 0;
+
+    // Load sheet URL
+    googleSheetUrl = localStorage.getItem('wealthy_ai_google_sheet_url') || '';
 }
 
 function saveData() {
     localStorage.setItem('wealthy_ai_transactions', JSON.stringify(transactions));
     localStorage.setItem('wealthy_ai_starting_cash', startingCash);
     localStorage.setItem('wealthy_ai_starting_bank', startingBank);
+    localStorage.setItem('wealthy_ai_google_sheet_url', googleSheetUrl);
 }
 
 // 5. Data Actions: Export / Import JSON
@@ -285,6 +371,9 @@ function setupDataActions() {
                         saveData();
                         updateUI();
                         showToast('นำเข้าข้อมูลเรียบร้อยแล้ว!');
+                        if (googleSheetUrl) {
+                            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+                        }
                     } else {
                         showToast('โครงสร้างไฟล์ข้อมูลไม่ถูกต้อง', 'error');
                     }
@@ -311,6 +400,9 @@ function setupDataActions() {
             saveData();
             updateUI();
             showToast('ล้างข้อมูลทั้งหมดเรียบร้อยแล้วค่ะ', 'error');
+            if (googleSheetUrl) {
+                pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+            }
         }
     });
 }
@@ -461,6 +553,11 @@ function addTransaction(type, category, amount, date, description, wallet = 'ban
 
     saveData();
     updateUI();
+
+    // Auto push to Google Sheets
+    if (googleSheetUrl) {
+        pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+    }
 }
 
 function deleteTransaction(id) {
@@ -469,6 +566,11 @@ function deleteTransaction(id) {
         saveData();
         updateUI();
         showToast('ลบรายการสำเร็จแล้ว', 'error');
+
+        // Auto push to Google Sheets
+        if (googleSheetUrl) {
+            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+        }
     }
 }
 
@@ -1557,4 +1659,134 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.classList.add('hide');
     }, 3500);
+}
+
+// =============================================================
+// 16. Google Sheets Sync API Core
+// =============================================================
+function updateSyncStatus(status) {
+    const badge = document.getElementById('sync-status-badge');
+    if (!badge) return;
+
+    badge.className = 'sync-status';
+    const text = badge.querySelector('.status-text');
+    
+    syncStatus = status;
+
+    if (status === 'online') {
+        badge.classList.add('online');
+        text.textContent = 'เชื่อมต่อแล้ว';
+        badge.setAttribute('title', 'เชื่อมต่อกับ Google Sheets แล้ว');
+    } else if (status === 'syncing') {
+        badge.classList.add('syncing');
+        text.textContent = 'กำลังซิงก์...';
+        badge.setAttribute('title', 'กำลังซิงก์ข้อมูลกับ Google Sheets...');
+    } else {
+        badge.classList.add('offline');
+        text.textContent = 'ออฟไลน์';
+        badge.setAttribute('title', 'ไม่ได้เชื่อมต่อ Google Sheets หรือออฟไลน์อยู่');
+    }
+}
+
+async function pullFromGoogleSheet(isManual = false) {
+    if (!googleSheetUrl) {
+        updateSyncStatus('offline');
+        return;
+    }
+
+    updateSyncStatus('syncing');
+
+    try {
+        const url = `${googleSheetUrl}?action=getAll&_t=${Date.now()}`;
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result && result.success) {
+            // Update state variables
+            transactions = result.transactions || [];
+            startingCash = parseFloat(result.startingCash) || 0;
+            startingBank = parseFloat(result.startingBank) || 0;
+            
+            if (result.currentCurrency) {
+                currentCurrency = result.currentCurrency;
+                const selector = document.getElementById('currency-selector');
+                if (selector) selector.value = currentCurrency;
+                localStorage.setItem('wealthy_ai_currency', currentCurrency);
+            }
+
+            // Sort descending
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            saveData();
+            updateUI();
+            updateSyncStatus('online');
+
+            if (isManual) {
+                showToast('ดึงข้อมูลจาก Google Sheets สำเร็จแล้วค่ะ!');
+            }
+        } else {
+            throw new Error(result.message || 'Unknown error from server');
+        }
+    } catch (error) {
+        console.error('Error pulling from Google Sheet:', error);
+        updateSyncStatus('offline');
+        if (isManual) {
+            showToast('ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบ URL หรืออินเทอร์เน็ต', 'error');
+        }
+    }
+}
+
+async function pushToGoogleSheet(action, payload, isManual = false) {
+    if (!googleSheetUrl) {
+        updateSyncStatus('offline');
+        return;
+    }
+
+    updateSyncStatus('syncing');
+
+    try {
+        const bodyData = {
+            action: action,
+            transactions: payload.transactions,
+            startingCash: payload.startingCash,
+            startingBank: payload.startingBank,
+            currentCurrency: payload.currentCurrency || currentCurrency
+        };
+
+        const response = await fetch(googleSheetUrl, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(bodyData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result && result.success) {
+            updateSyncStatus('online');
+            if (isManual) {
+                showToast('ส่งข้อมูลไป Google Sheets สำเร็จแล้วค่ะ!');
+            }
+        } else {
+            throw new Error(result.message || 'Unknown error from server');
+        }
+    } catch (error) {
+        console.error('Error pushing to Google Sheet:', error);
+        updateSyncStatus('offline');
+        if (isManual) {
+            showToast('ไม่สามารถส่งข้อมูลได้ กรุณาตรวจสอบ URL หรืออินเทอร์เน็ต', 'error');
+        }
+    }
 }
