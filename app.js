@@ -29,7 +29,7 @@ let yearlyChartInstance = null;
 let currentCurrency = 'JPY'; // Default currency
 let startingCash = 0;
 let startingBank = 0;
-let googleSheetUrl = 'https://script.google.com/macros/s/AKfycbxXiu0pzkdcSh8uss93kd71Ov0NPZDlALZaONZpmIorJzgCAboRZWKKvSnY4IhkkM99rA/exec'; // Google Sheets Web App URL
+let googleSheetUrl = 'https://script.google.com/macros/s/AKfycbwqLr_9MspVgQcf9qMLhx6Bb_JB7OxQmpvqcfCTl3ml/exec'; // Google Sheets Web App URL
 let syncStatus = 'offline'; // 'online' | 'syncing' | 'offline'
 
 // Mock Data for Initial Load (Using Year 2026 based on Current Metadata)
@@ -320,10 +320,19 @@ function loadData() {
     startingBank = parseFloat(localStorage.getItem('wealthy_ai_starting_bank')) || 0;
 
     // Load sheet URL
-    if (localStorage.getItem('wealthy_ai_google_sheet_url') !== null) {
-        googleSheetUrl = localStorage.getItem('wealthy_ai_google_sheet_url');
+    const oldUrl = 'https://script.google.com/macros/s/AKfycbxXiu0pzkdcSh8uss93kd71Ov0NPZDlALZaONZpmIorJzgCAboRZWKKvSnY4IhkkM99rA/exec';
+    const newUrl = 'https://script.google.com/macros/s/AKfycbwqLr_9MspVgQcf9qMLhx6Bb_JB7OxQmpvqcfCTl3ml/exec';
+    
+    let savedUrl = localStorage.getItem('wealthy_ai_google_sheet_url');
+    if (savedUrl === oldUrl) {
+        savedUrl = newUrl;
+        localStorage.setItem('wealthy_ai_google_sheet_url', newUrl);
+    }
+    
+    if (savedUrl !== null) {
+        googleSheetUrl = savedUrl;
     } else {
-        googleSheetUrl = 'https://script.google.com/macros/s/AKfycbxXiu0pzkdcSh8uss93kd71Ov0NPZDlALZaONZpmIorJzgCAboRZWKKvSnY4IhkkM99rA/exec';
+        googleSheetUrl = newUrl;
         localStorage.setItem('wealthy_ai_google_sheet_url', googleSheetUrl);
     }
 }
