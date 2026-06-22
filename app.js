@@ -30,7 +30,7 @@ let yearlyChartInstance = null;
 let currentCurrency = 'JPY'; // Default currency
 let startingCash = 0;
 let startingBank = 0;
-let googleSheetUrl = 'https://script.google.com/macros/s/AKfycbyfYYeMNd3DgusGddy813TcTKK0RzdeO-PDiEZ7wGv25mANtQw1oriwXEYYOy0F9S92mw/exec'; // Google Sheets Web App URL
+let googleSheetUrl = 'https://script.google.com/macros/s/AKfycbw0MRGV_KuM272iKjlabLDHw_pLMe2nk3mQz1diNKHM2xB6KKyT_Df-k41rzfjmSzeb/exec'; // Google Sheets Web App URL
 let syncStatus = 'offline'; // 'online' | 'syncing' | 'offline'
 let tempTransactionImage = null; // Temporary image holder for Transaction form
 let tempLendingImage = null; // Temporary image holder for Lending form
@@ -351,12 +351,13 @@ function loadData() {
     // Load sheet URL
     const oldUrls = [
         'https://script.google.com/macros/s/AKfycbxXiu0pzkdcSh8uss93kd71Ov0NPZDlALZaONZpmIorJzgCAboRZWKKvSnY4IhkkM99rA/exec',
-        'https://script.google.com/macros/s/AKfycbwqLr_9MspVgQcf9qMLhx6Bb_JB7OxQmpvqcfCTl3ml/exec'
+        'https://script.google.com/macros/s/AKfycbwqLr_9MspVgQcf9qMLhx6Bb_JB7OxQmpvqcfCTl3ml/exec',
+        'https://script.google.com/macros/s/AKfycbyfYYeMNd3DgusGddy813TcTKK0RzdeO-PDiEZ7wGv25mANtQw1oriwXEYYOy0F9S92mw/exec'
     ];
-    const newUrl = 'https://script.google.com/macros/s/AKfycbyfYYeMNd3DgusGddy813TcTKK0RzdeO-PDiEZ7wGv25mANtQw1oriwXEYYOy0F9S92mw/exec';
+    const newUrl = 'https://script.google.com/macros/s/AKfycbw0MRGV_KuM272iKjlabLDHw_pLMe2nk3mQz1diNKHM2xB6KKyT_Df-k41rzfjmSzeb/exec';
     
     let savedUrl = localStorage.getItem('wealthy_ai_google_sheet_url');
-    if (oldUrls.includes(savedUrl)) {
+    if (oldUrls.includes(savedUrl) || savedUrl === 'https://script.google.com/macros/s/AKfycbyfYYeMNd3DgusGddy813TcTKK0RzdeO-PDiEZ7wGv25mANtQw1oriwXEYYOy0F9S92mw/exec') {
         savedUrl = newUrl;
         localStorage.setItem('wealthy_ai_google_sheet_url', newUrl);
     }
@@ -1819,9 +1820,28 @@ async function pullFromGoogleSheet(isManual = false) {
 
         const result = await response.json();
         if (result && result.success) {
-            // Update state variables
-            transactions = result.transactions || [];
-            lending = result.lending || []; // V2
+            // Update state variables and normalize transaction keys to lowercase
+            const rawTransactions = result.transactions || [];
+            transactions = rawTransactions.map(tx => {
+                const normalized = {};
+                Object.keys(tx).forEach(key => {
+                    normalized[key.toLowerCase()] = tx[key];
+                });
+                if (normalized.amount) normalized.amount = parseFloat(normalized.amount) || 0;
+                return normalized;
+            });
+
+            // Normalize lending keys to lowercase
+            const rawLending = result.lending || [];
+            lending = rawLending.map(l => {
+                const normalized = {};
+                Object.keys(l).forEach(key => {
+                    normalized[key.toLowerCase()] = l[key];
+                });
+                if (normalized.amount) normalized.amount = parseFloat(normalized.amount) || 0;
+                return normalized;
+            });
+
             startingCash = parseFloat(result.startingCash) || 0;
             startingBank = parseFloat(result.startingBank) || 0;
             
