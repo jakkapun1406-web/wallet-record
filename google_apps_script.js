@@ -16,6 +16,17 @@
  * 9. Copy the new Web App URL (URL ของเว็บแอป) and paste it into the Settings Modal in the WealthyAI app.
  */
 
+// Target spreadsheet ID explicitly from your Google Sheets URL
+const SPREADSHEET_ID = "19kcpOaK2dngaYTxTU7MRoSjt8q-_HiOOX9AcFTJoerc";
+
+function getSpreadsheet() {
+  try {
+    return SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch (e) {
+    return SpreadsheetApp.getActiveSpreadsheet();
+  }
+}
+
 // Handle GET requests
 function doGet(e) {
   return handleResponse(getAllData());
@@ -49,7 +60,7 @@ function handleResponse(data) {
 
 // Fetch all database records from Google Sheet
 function getAllData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   
   // 1. Get Transactions
   const txSheet = getOrCreateSheet(ss, "Transactions");
@@ -115,7 +126,7 @@ function getAllData() {
 
 // Overwrite Sheets with local app data
 function saveAllData(payload) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
 
   // 1. Save Transactions
   const txSheet = getOrCreateSheet(ss, "Transactions");
