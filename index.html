@@ -12,6 +12,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tesseract.js OCR library -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4/dist/tesseract.min.js"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -38,6 +40,10 @@
                 <button class="nav-item" data-target="analytics">
                     <i data-lucide="line-chart"></i>
                     <span>วิเคราะห์รายเดือน/ปี</span>
+                </button>
+                <button class="nav-item" data-target="lending">
+                    <i data-lucide="hand-coins"></i>
+                    <span>บันทึกคนยืมเงิน</span>
                 </button>
                 <button class="nav-item" data-target="ai-advisor">
                     <i data-lucide="sparkles" class="ai-sparkle-icon"></i>
@@ -299,6 +305,26 @@
                                     <label for="full-desc">บันทึกช่วยจำ (ไม่บังคับ)</label>
                                     <input type="text" id="full-desc" placeholder="เช่น ค่าข้าวเที่ยง, เงินเดือนออก">
                                 </div>
+                                <div class="form-group" style="margin-top: 0.5rem;">
+                                    <label>แนบรูปภาพสลิป/ใบเสร็จ (สแกนข้อมูลอัตโนมัติ)</label>
+                                    <div class="image-upload-wrapper">
+                                        <div class="image-upload-zone" id="full-upload-zone">
+                                            <i data-lucide="image-plus"></i>
+                                            <span>คลิกเพื่ออัปโหลดหรือถ่ายรูปสลิป</span>
+                                            <input type="file" id="full-image-input" accept="image/*" style="display: none;">
+                                        </div>
+                                        <div class="image-preview-container hide" id="full-image-preview-container">
+                                            <img id="full-image-preview" src="" alt="Slip Preview">
+                                            <button type="button" class="btn-remove-image" id="full-remove-image-btn">
+                                                <i data-lucide="trash-2"></i>
+                                            </button>
+                                        </div>
+                                        <div class="ocr-status-indicator hide" id="full-ocr-status">
+                                            <div class="ocr-spinner"></div>
+                                            <span>กำลังสแกนรูปภาพด้วย AI...</span>
+                                        </div>
+                                    </div>
+                                </div>
                                 <button type="submit" class="btn btn-primary btn-full">
                                     <i data-lucide="save"></i> บันทึกข้อมูล
                                 </button>
@@ -538,6 +564,140 @@
                     </div>
                 </section>
 
+                <!-- VIEW 5: LENDING TRACKER -->
+                <section id="view-lending" class="app-view">
+                    <!-- Lending Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card balance">
+                            <div class="card-header">
+                                <span>ยอดเงินยืมค้างชำระทั้งหมด</span>
+                                <div class="icon-box"><i data-lucide="hand-coins"></i></div>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="lending-total-lent">฿0.00</h3>
+                                <p class="sub-text" id="lending-active-count">รอกระตุ้นการคืนเงิน 0 รายการ</p>
+                            </div>
+                        </div>
+                        <div class="stat-card income">
+                            <div class="card-header">
+                                <span>จำนวนเงินที่ได้รับคืนแล้ว</span>
+                                <div class="icon-box"><i data-lucide="badge-check"></i></div>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="lending-total-repaid" class="text-success">฿0.00</h3>
+                                <p class="sub-text text-success" id="lending-repaid-count">ชำระคืนเสร็จสิ้น 0 รายการ</p>
+                            </div>
+                        </div>
+                        <div class="stat-card expense">
+                            <div class="card-header">
+                                <span>อัตราการชำระคืนเงินยืม</span>
+                                <div class="icon-box"><i data-lucide="percent"></i></div>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="lending-repayment-rate">0%</h3>
+                                <div class="progress-bar-bg" style="margin-top: 0.5rem; height: 6px;">
+                                    <div class="progress-bar-fill" id="lending-repayment-progress" style="width: 0%; background: var(--color-success);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lending Dashboard Layout -->
+                    <div class="transactions-layout">
+                        <!-- Left Panel: Add Loan Form -->
+                        <div class="glass-card form-container-card">
+                            <div class="card-title-bar">
+                                <h3>ฟอร์มบันทึกคนยืมเงิน</h3>
+                            </div>
+                            <form id="lending-add-form">
+                                <div class="form-group">
+                                    <label for="lending-borrower">ชื่อผู้ยืมเงิน</label>
+                                    <input type="text" id="lending-borrower" placeholder="เช่น นายสมชาย, น้องเอ" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="lending-amount">จำนวนเงินที่ยืม</label>
+                                        <input type="number" id="lending-amount" placeholder="0.00" min="0.01" step="any" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lending-wallet">เงินที่เอาให้ยืมหักจาก</label>
+                                        <select id="lending-wallet" required>
+                                            <option value="bank">🏦 บัญชีธนาคาร</option>
+                                            <option value="cash">💵 เงินสด</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="lending-date">วันที่ยืม</label>
+                                        <input type="date" id="lending-date" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lending-due-date">กำหนดคืนเงิน</label>
+                                        <input type="date" id="lending-due-date" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="lending-desc">บันทึกข้อความย่อ (ไม่บังคับ)</label>
+                                    <input type="text" id="lending-desc" placeholder="เช่น ยืมค่าตั๋วหนัง, สัญญายืมปากเปล่า">
+                                </div>
+                                
+                                <!-- File Upload for Lending -->
+                                <div class="form-group" style="margin-top: 0.5rem;">
+                                    <label>แนบสลิป/หลักฐานการยืมเงิน (สแกนข้อมูลอัตโนมัติ)</label>
+                                    <div class="image-upload-wrapper">
+                                        <div class="image-upload-zone" id="lending-upload-zone">
+                                            <i data-lucide="image-plus"></i>
+                                            <span>คลิกเพื่อแนบรูปสลิป/สัญญายืมเงิน</span>
+                                            <input type="file" id="lending-image-input" accept="image/*" style="display: none;">
+                                        </div>
+                                        <div class="image-preview-container hide" id="lending-image-preview-container">
+                                            <img id="lending-image-preview" src="" alt="Lending Slip Preview">
+                                            <button type="button" class="btn-remove-image" id="lending-remove-image-btn">
+                                                <i data-lucide="trash-2"></i>
+                                            </button>
+                                        </div>
+                                        <div class="ocr-status-indicator hide" id="lending-ocr-status">
+                                            <div class="ocr-spinner"></div>
+                                            <span>กำลังสแกนรูปภาพด้วย AI...</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-full" style="margin-top: 0.75rem;">
+                                    <i data-lucide="plus-circle"></i> บันทึกคนยืมเงิน
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Right Panel: History of Borrowers -->
+                        <div class="glass-card list-container-card">
+                            <div class="card-title-bar filter-bar">
+                                <h3>รายการคนยืมเงินทั้งหมด</h3>
+                                <div class="filter-controls">
+                                    <div class="search-box">
+                                        <i data-lucide="search"></i>
+                                        <input type="text" id="lending-search-input" placeholder="ค้นหาคนยืม...">
+                                    </div>
+                                    <select id="lending-filter-status">
+                                        <option value="all">สถานะทั้งหมด</option>
+                                        <option value="lent">ยังไม่คืน (ค้างชำระ)</option>
+                                        <option value="returned">คืนเงินเรียบร้อย</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="lending-list-container" id="lending-list">
+                                <!-- Dynamic Lending Cards -->
+                            </div>
+                            <div id="lending-empty-state" class="empty-state">
+                                <i data-lucide="contact-2"></i>
+                                <p>ยังไม่มีบันทึกข้อมูลคนยืมเงิน</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </main>
     </div>
@@ -603,6 +763,21 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Viewer Modal -->
+    <div id="image-viewer-modal" class="modal-overlay hide">
+        <div class="glass-card modal-content" style="max-width: 600px; width: 95%; margin: 5% auto; position: relative;">
+            <div class="card-title-bar">
+                <h3>รูปภาพหลักฐาน / สลิป</h3>
+                <button id="close-image-viewer-btn" class="btn-icon" type="button">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div style="display: flex; justify-content: center; align-items: center; padding: 1rem; min-height: 200px;">
+                <img id="viewer-modal-img" src="" alt="Receipt Full View" style="max-width: 100%; max-height: 70vh; border-radius: 8px; object-fit: contain;">
             </div>
         </div>
     </div>

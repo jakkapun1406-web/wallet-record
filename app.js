@@ -24,6 +24,7 @@ const CATEGORY_MAP = {
 
 // State Variables
 let transactions = [];
+let lending = []; // V2 Lending state
 let categoryChartInstance = null;
 let yearlyChartInstance = null;
 let currentCurrency = 'JPY'; // Default currency
@@ -31,6 +32,8 @@ let startingCash = 0;
 let startingBank = 0;
 let googleSheetUrl = 'https://script.google.com/macros/s/AKfycbyfYYeMNd3DgusGddy813TcTKK0RzdeO-PDiEZ7wGv25mANtQw1oriwXEYYOy0F9S92mw/exec'; // Google Sheets Web App URL
 let syncStatus = 'offline'; // 'online' | 'syncing' | 'offline'
+let tempTransactionImage = null; // Temporary image holder for Transaction form
+let tempLendingImage = null; // Temporary image holder for Lending form
 
 // Mock Data for Initial Load (Using Year 2026 based on Current Metadata)
 const MOCK_TRANSACTIONS = [
@@ -75,6 +78,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentMonthStr = todayStr.substring(0, 7); // YYYY-MM
     document.getElementById('analytics-month').value = currentMonthStr;
 
+    // Set default dates for lending inputs
+    const lendingDateEl = document.getElementById('lending-date');
+    if (lendingDateEl) {
+        lendingDateEl.value = todayStr;
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        document.getElementById('lending-due-date').value = `${year}-${month}-${day}`;
+    }
+
     // Set up event listeners
     setupNavigation();
     setupForms();
@@ -83,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDataActions();
     setupAIChat();
     setupSettingsModal();
+    setupLending();        // V2 Lending Listeners
+    setupImageUpload();    // V2 Image OCR & Upload
+    setupImageViewer();    // V2 Image Lightbox Viewer
     
     // Initial UI Render
     updateUI();
@@ -118,7 +136,7 @@ function initCurrency() {
         updateUI();
         showToast(`เปลี่ยนสกุลเงินเป็น ${currentCurrency === 'JPY' ? 'เยน (¥)' : 'บาท (฿)'} สำเร็จแล้วค่ะ!`);
         if (googleSheetUrl) {
-            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+            pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
         }
     });
 }
@@ -191,7 +209,7 @@ function setupSettingsModal() {
         
         // Auto push starting balance if sync configured
         if (googleSheetUrl) {
-            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+            pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
         }
         
         modal.classList.add('hide');
@@ -232,7 +250,7 @@ function setupSettingsModal() {
     });
 
     pushBtn.addEventListener('click', () => {
-        pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank }, true);
+        pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank }, true);
     });
 }
 
@@ -273,6 +291,10 @@ function setupNavigation() {
                     pageTitle.textContent = 'การวิเคราะห์เชิงลึก';
                     pageSubtitle.textContent = 'วิเคราะห์สถิติ สัดส่วนการออม และพฤติกรรมการจ่ายเงินเป็นรายเดือน/รายปี';
                     break;
+                case 'lending':
+                    pageTitle.textContent = 'ระบบบันทึกคนยืมเงิน';
+                    pageSubtitle.textContent = 'จดบันทึกประวัติการยืมเงินของผู้ยืม และอัปโหลดภาพสัญญาหลักฐานการยืมเงิน';
+                    break;
                 case 'ai-advisor':
                     pageTitle.textContent = 'ผู้ช่วย AI น้องถุงเงิน';
                     pageSubtitle.textContent = 'รับรายงานวิเคราะห์ความปลอดภัยทางการเงิน และแชทคุยหาไอเดียลดค่าใช้จ่าย';
@@ -285,6 +307,9 @@ function setupNavigation() {
             }
             if (target === 'ai-advisor') {
                 renderAIAdvisorView();
+            }
+            if (target === 'lending') {
+                renderLendingView();
             }
         });
     });
@@ -315,6 +340,10 @@ function loadData() {
         saveData();
     }
 
+    // Load V2 Lending data
+    const storedLending = localStorage.getItem('wealthy_ai_lending');
+    lending = storedLending ? JSON.parse(storedLending) : [];
+
     // Load starting balances
     startingCash = parseFloat(localStorage.getItem('wealthy_ai_starting_cash')) || 0;
     startingBank = parseFloat(localStorage.getItem('wealthy_ai_starting_bank')) || 0;
@@ -342,6 +371,7 @@ function loadData() {
 
 function saveData() {
     localStorage.setItem('wealthy_ai_transactions', JSON.stringify(transactions));
+    localStorage.setItem('wealthy_ai_lending', JSON.stringify(lending));
     localStorage.setItem('wealthy_ai_starting_cash', startingCash);
     localStorage.setItem('wealthy_ai_starting_bank', startingBank);
     localStorage.setItem('wealthy_ai_google_sheet_url', googleSheetUrl);
@@ -354,11 +384,18 @@ function setupDataActions() {
     const fileInput = document.getElementById('import-file');
 
     exportBtn.addEventListener('click', () => {
-        if (transactions.length === 0) {
+        if (transactions.length === 0 && lending.length === 0) {
             showToast('ไม่มีข้อมูลสำหรับส่งออก', 'error');
             return;
         }
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(transactions, null, 2));
+        const exportObj = {
+            version: "2.0.0",
+            transactions: transactions,
+            lending: lending,
+            startingCash: startingCash,
+            startingBank: startingBank
+        };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
         const downloadAnchor = document.createElement('a');
         downloadAnchor.setAttribute("href", dataStr);
         downloadAnchor.setAttribute("download", `WealthyAI_Data_${getTodayDateString()}.json`);
@@ -381,18 +418,31 @@ function setupDataActions() {
             try {
                 const parsed = JSON.parse(e.target.result);
                 if (Array.isArray(parsed)) {
-                    // Quick validation of array items
+                    // V1 compatibility: array of transactions
                     const isValid = parsed.every(item => item.id && item.type && item.amount && item.category && item.date);
                     if (isValid) {
                         transactions = parsed;
+                        lending = [];
                         saveData();
                         updateUI();
                         showToast('นำเข้าข้อมูลเรียบร้อยแล้ว!');
                         if (googleSheetUrl) {
-                            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+                            pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
                         }
                     } else {
                         showToast('โครงสร้างไฟล์ข้อมูลไม่ถูกต้อง', 'error');
+                    }
+                } else if (parsed && typeof parsed === 'object') {
+                    // V2 format: object with transactions and lending
+                    transactions = parsed.transactions || [];
+                    lending = parsed.lending || [];
+                    if (parsed.startingCash !== undefined) startingCash = parsed.startingCash;
+                    if (parsed.startingBank !== undefined) startingBank = parsed.startingBank;
+                    saveData();
+                    updateUI();
+                    showToast('นำเข้าข้อมูลสำเร็จแล้ว!');
+                    if (googleSheetUrl) {
+                        pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
                     }
                 } else {
                     showToast('รูปแบบไฟล์ไม่ใช่ข้อมูลธุรกรรมที่ถูกต้อง', 'error');
@@ -408,17 +458,18 @@ function setupDataActions() {
 
     const clearAllBtn = document.getElementById('clear-all-btn');
     clearAllBtn.addEventListener('click', () => {
-        if (transactions.length === 0) {
+        if (transactions.length === 0 && lending.length === 0) {
             showToast('ไม่มีข้อมูลใดๆ ให้ล้างอยู่แล้วค่ะ', 'error');
             return;
         }
-        if (confirm('คุณต้องการลบข้อมูลประวัติรายรับรายจ่ายทั้งหมดใช่หรือไม่? (การดำเนินการนี้ไม่สามารถเรียกคืนได้)')) {
+        if (confirm('คุณต้องการลบข้อมูลประวัติรายรับรายจ่ายและคนยืมเงินทั้งหมดใช่หรือไม่? (การดำเนินการนี้ไม่สามารถเรียกคืนได้)')) {
             transactions = [];
+            lending = [];
             saveData();
             updateUI();
             showToast('ล้างข้อมูลทั้งหมดเรียบร้อยแล้วค่ะ', 'error');
             if (googleSheetUrl) {
-                pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+                pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
             }
         }
     });
@@ -444,6 +495,10 @@ function updateUI() {
 
     // Refresh AI advice
     updateAIQuickSummary();
+
+    // Update Lending View & Stats
+    updateLendingStats();
+    renderLendingView();
 }
 
 // Helper: Populate Category Selectors dynamically based on transaction type
@@ -540,7 +595,7 @@ function setupForms() {
         const wallet = document.getElementById('full-wallet').value;
         const description = document.getElementById('full-desc').value.trim() || CATEGORY_MAP[category].name;
 
-        addTransaction(type, category, amount, date, description, wallet);
+        addTransaction(type, category, amount, date, description, wallet, tempTransactionImage);
         fullForm.reset();
         
         // Reset type to expense
@@ -553,7 +608,7 @@ function setupForms() {
     });
 }
 
-function addTransaction(type, category, amount, date, description, wallet = 'bank') {
+function addTransaction(type, category, amount, date, description, wallet = 'bank', imageUrl = null) {
     const newTx = {
         id: 'tx-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
         type,
@@ -561,10 +616,22 @@ function addTransaction(type, category, amount, date, description, wallet = 'ban
         category,
         date,
         description,
-        wallet
+        wallet,
+        imageUrl: imageUrl
     };
     transactions.push(newTx);
     
+    // Reset temp image and preview UI
+    tempTransactionImage = null;
+    const previewContainer = document.getElementById('full-image-preview-container');
+    const uploadZone = document.getElementById('full-upload-zone');
+    if (previewContainer) {
+        previewContainer.classList.add('hide');
+        uploadZone.classList.remove('hide');
+        document.getElementById('full-image-preview').src = '';
+        document.getElementById('full-image-input').value = '';
+    }
+
     // Sort transactions by date descending
     transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -573,7 +640,7 @@ function addTransaction(type, category, amount, date, description, wallet = 'ban
 
     // Auto push to Google Sheets
     if (googleSheetUrl) {
-        pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+        pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
     }
 }
 
@@ -586,7 +653,7 @@ function deleteTransaction(id) {
 
         // Auto push to Google Sheets
         if (googleSheetUrl) {
-            pushToGoogleSheet('saveAll', { transactions, startingCash, startingBank });
+            pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
         }
     }
 }
@@ -661,8 +728,22 @@ function updateDashboardCards() {
         }
     });
 
-    const currentCash = startingCash + cashIncome - cashExpense;
-    const currentBank = startingBank + bankIncome - bankExpense;
+    // Subtract active (unreturned) loans from balances
+    let activeLentCash = 0;
+    let activeLentBank = 0;
+    
+    lending.forEach(lend => {
+        if (lend.status === 'lent') {
+            if (lend.wallet === 'cash') {
+                activeLentCash += lend.amount;
+            } else {
+                activeLentBank += lend.amount;
+            }
+        }
+    });
+
+    const currentCash = startingCash + cashIncome - cashExpense - activeLentCash;
+    const currentBank = startingBank + bankIncome - bankExpense - activeLentBank;
     const totalBalance = currentCash + currentBank;
 
     // Populate elements
@@ -786,6 +867,10 @@ function createTransactionRow(tx) {
 
     const walletText = tx.wallet === 'cash' ? '💵 เงินสด' : '🏦 บัญชี';
 
+    const imageBtnHtml = tx.imageUrl 
+        ? `<button class="btn-view-image-row" data-url="${tx.imageUrl}" style="background:transparent;border:none;color:#a78bfa;cursor:pointer;margin-right:8px;padding:4px;vertical-align:middle;" title="ดูรูปสลิป"><i data-lucide="image" style="width:16px;height:16px"></i></button>`
+        : '';
+
     tr.innerHTML = `
         <td style="font-family: var(--font-eng);">${dateFormatted}</td>
         <td>${typeBadge}</td>
@@ -799,9 +884,17 @@ function createTransactionRow(tx) {
         <td class="text-muted" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tx.description || '-'}</td>
         <td class="${amountClass} text-right" style="font-weight: 600; font-family: var(--font-eng);">${amountFormatted}</td>
         <td class="text-center">
+            ${imageBtnHtml}
             <button class="btn-delete" data-id="${tx.id}"><i data-lucide="trash-2" style="width:16px;height:16px"></i></button>
         </td>
     `;
+
+    // Event listener for view image button
+    if (tx.imageUrl) {
+        tr.querySelector('.btn-view-image-row').addEventListener('click', () => {
+            openImageViewer(tx.imageUrl);
+        });
+    }
 
     // Event listener for delete button
     tr.querySelector('.btn-delete').addEventListener('click', () => {
@@ -1728,6 +1821,7 @@ async function pullFromGoogleSheet(isManual = false) {
         if (result && result.success) {
             // Update state variables
             transactions = result.transactions || [];
+            lending = result.lending || []; // V2
             startingCash = parseFloat(result.startingCash) || 0;
             startingBank = parseFloat(result.startingBank) || 0;
             
@@ -1772,6 +1866,7 @@ async function pushToGoogleSheet(action, payload, isManual = false) {
         const bodyData = {
             action: action,
             transactions: payload.transactions,
+            lending: payload.lending || lending, // V2
             startingCash: payload.startingCash,
             startingBank: payload.startingBank,
             currentCurrency: payload.currentCurrency || currentCurrency
@@ -1805,5 +1900,564 @@ async function pushToGoogleSheet(action, payload, isManual = false) {
         if (isManual) {
             showToast('ไม่สามารถส่งข้อมูลได้ กรุณาตรวจสอบ URL หรืออินเทอร์เน็ต', 'error');
         }
+    }
+}
+
+// =============================================================
+// V2 Lending Tracker Logic & Helpers
+// =============================================================
+
+function setupLending() {
+    const form = document.getElementById('lending-add-form');
+    if (!form) return;
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const borrower = document.getElementById('lending-borrower').value.trim();
+        const amount = parseFloat(document.getElementById('lending-amount').value);
+        const wallet = document.getElementById('lending-wallet').value;
+        const lentDate = document.getElementById('lending-date').value;
+        const dueDate = document.getElementById('lending-due-date').value;
+        const note = document.getElementById('lending-desc').value.trim();
+        
+        addLendingRecord(borrower, amount, wallet, lentDate, dueDate, note, tempLendingImage);
+        
+        form.reset();
+        
+        // Reset defaults
+        const todayStr = getTodayDateString();
+        document.getElementById('lending-date').value = todayStr;
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        document.getElementById('lending-due-date').value = `${year}-${month}-${day}`;
+        
+        showToast(`บันทึกการยืมเงินของ ${borrower} สำเร็จแล้ว!`);
+    });
+
+    const searchInput = document.getElementById('lending-search-input');
+    const statusFilter = document.getElementById('lending-filter-status');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', () => renderLendingView());
+        statusFilter.addEventListener('change', () => renderLendingView());
+    }
+}
+
+function addLendingRecord(borrower, amount, wallet, lentDate, dueDate, note, imageUrl = null) {
+    const newLend = {
+        id: 'lend-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        borrower,
+        amount,
+        wallet,
+        lentDate,
+        dueDate,
+        note,
+        status: 'lent', // 'lent' or 'returned'
+        returnedDate: null,
+        imageUrl: imageUrl
+    };
+
+    lending.push(newLend);
+    // Sort by lent date descending
+    lending.sort((a, b) => new Date(b.lentDate) - new Date(a.lentDate));
+
+    // Reset temp image and preview UI
+    tempLendingImage = null;
+    const previewContainer = document.getElementById('lending-image-preview-container');
+    const uploadZone = document.getElementById('lending-upload-zone');
+    if (previewContainer) {
+        previewContainer.classList.add('hide');
+        uploadZone.classList.remove('hide');
+        document.getElementById('lending-image-preview').src = '';
+        document.getElementById('lending-image-input').value = '';
+    }
+
+    saveData();
+    updateUI();
+
+    if (googleSheetUrl) {
+        pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
+    }
+}
+
+function toggleLendingStatus(id) {
+    const record = lending.find(l => l.id === id);
+    if (!record) return;
+
+    if (record.status === 'lent') {
+        record.status = 'returned';
+        record.returnedDate = getTodayDateString();
+        showToast(`คืนเงินจาก ${record.borrower} เรียบร้อยแล้ว!`);
+    } else {
+        record.status = 'lent';
+        record.returnedDate = null;
+        showToast(`เปลี่ยนสถานะเป็นค้างชำระของ ${record.borrower} แล้ว`);
+    }
+
+    saveData();
+    updateUI();
+
+    if (googleSheetUrl) {
+        pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
+    }
+}
+
+function deleteLendingRecord(id) {
+    const record = lending.find(l => l.id === id);
+    if (!record) return;
+
+    if (confirm(`คุณต้องการลบรายการยืมเงินของ ${record.borrower} ใช่หรือไม่?`)) {
+        lending = lending.filter(l => l.id !== id);
+        saveData();
+        updateUI();
+        showToast('ลบประวัติการยืมเงินแล้ว', 'error');
+
+        if (googleSheetUrl) {
+            pushToGoogleSheet('saveAll', { transactions, lending, startingCash, startingBank });
+        }
+    }
+}
+
+function updateLendingStats() {
+    let totalLent = 0;
+    let totalRepaid = 0;
+    let activeLoansCount = 0;
+    let repaidLoansCount = 0;
+
+    lending.forEach(l => {
+        if (l.status === 'lent') {
+            totalLent += l.amount;
+            activeLoansCount++;
+        } else {
+            totalRepaid += l.amount;
+            repaidLoansCount++;
+        }
+    });
+
+    const totalLoans = totalLent + totalRepaid;
+    const repaymentRate = totalLoans > 0 ? Math.round((totalRepaid / totalLoans) * 100) : 0;
+
+    const totalLentEl = document.getElementById('lending-total-lent');
+    if (totalLentEl) {
+        totalLentEl.textContent = formatCurrency(totalLent);
+        document.getElementById('lending-active-count').textContent = `รอกระตุ้นการคืนเงิน ${activeLoansCount} รายการ`;
+        
+        document.getElementById('lending-total-repaid').textContent = formatCurrency(totalRepaid);
+        document.getElementById('lending-repaid-count').textContent = `ชำระคืนเสร็จสิ้น ${repaidLoansCount} รายการ`;
+        
+        document.getElementById('lending-repayment-rate').textContent = `${repaymentRate}%`;
+        document.getElementById('lending-repayment-progress').style.width = `${repaymentRate}%`;
+    }
+}
+
+function renderLendingView() {
+    const list = document.getElementById('lending-list');
+    const emptyState = document.getElementById('lending-empty-state');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    const queryInput = document.getElementById('lending-search-input');
+    const query = queryInput ? queryInput.value.toLowerCase().trim() : '';
+    const statusSelect = document.getElementById('lending-filter-status');
+    const status = statusSelect ? statusSelect.value : 'all';
+
+    const filtered = lending.filter(l => {
+        const matchSearch = l.borrower.toLowerCase().includes(query) || (l.note || '').toLowerCase().includes(query);
+        const matchStatus = status === 'all' || l.status === status;
+        return matchSearch && matchStatus;
+    });
+
+    if (filtered.length === 0) {
+        emptyState.classList.remove('hide');
+        return;
+    } else {
+        emptyState.classList.add('hide');
+    }
+
+    filtered.forEach(l => {
+        const card = document.createElement('div');
+        const isReturned = l.status === 'returned';
+        card.className = `lending-card ${isReturned ? 'is-returned' : ''}`;
+
+        const badgeHtml = isReturned 
+            ? `<span class="lending-status-badge returned"><i data-lucide="check-circle-2" style="width:12px;height:12px"></i> คืนเงินแล้ว</span>`
+            : `<span class="lending-status-badge lent"><i data-lucide="clock" style="width:12px;height:12px"></i> ยังไม่คืน</span>`;
+
+        const actionBtnHtml = isReturned
+            ? `<button class="btn-pay" style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:1px solid var(--card-border);" onclick="toggleLendingStatus('${l.id}')"><i data-lucide="rotate-ccw" style="width:12px;height:12px"></i> แก้เป็นยังไม่คืน</button>`
+            : `<button class="btn-pay" onclick="toggleLendingStatus('${l.id}')"><i data-lucide="check-circle" style="width:12px;height:12px"></i> ได้รับเงินคืนแล้ว</button>`;
+
+        const imageBtnHtml = l.imageUrl
+            ? `<button class="btn-view-image" onclick="openImageViewer('${l.imageUrl}')" title="ดูเอกสาร/สลิป"><i data-lucide="image" style="width:12px;height:12px"></i></button>`
+            : '';
+
+        const walletText = l.wallet === 'cash' ? '💵 เงินสด' : '🏦 บัญชี';
+
+        // Format dates
+        const options = { day: 'numeric', month: 'short', year: 'numeric' };
+        const lentDateFmt = new Date(l.lentDate).toLocaleDateString('th-TH', options);
+        const dueDateFmt = new Date(l.dueDate).toLocaleDateString('th-TH', options);
+
+        card.innerHTML = `
+            <div class="lending-card-header">
+                <div class="lending-borrower-info">
+                    <h4>${l.borrower}</h4>
+                    <span>ยืมเงินวันที่: ${lentDateFmt}</span>
+                </div>
+                <div class="lending-amount-display">
+                    <div class="amount">${formatCurrency(l.amount)}</div>
+                    <span class="wallet-badge">${walletText}</span>
+                </div>
+            </div>
+            <div class="lending-card-details">
+                <div class="lending-detail-item">
+                    <i data-lucide="calendar-range" style="width:12px;height:12px"></i>
+                    <span>กำหนดคืน: ${dueDateFmt}</span>
+                </div>
+                <div class="lending-detail-item">
+                    <i data-lucide="scroll" style="width:12px;height:12px"></i>
+                    <span>บันทึก: ${l.note || '-'}</span>
+                </div>
+            </div>
+            <div class="lending-card-footer">
+                ${badgeHtml}
+                <div class="lending-card-actions">
+                    ${imageBtnHtml}
+                    ${actionBtnHtml}
+                    <button class="btn-delete-lend" onclick="deleteLendingRecord('${l.id}')"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+                </div>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+
+    lucide.createIcons();
+}
+
+// Global functions for inline HTML event onclicks
+window.toggleLendingStatus = toggleLendingStatus;
+window.deleteLendingRecord = deleteLendingRecord;
+
+// =============================================================
+// Image Viewer Modal Lightbox
+// =============================================================
+function setupImageViewer() {
+    const modal = document.getElementById('image-viewer-modal');
+    const closeBtn = document.getElementById('close-image-viewer-btn');
+    if (!modal) return;
+
+    closeBtn.addEventListener('click', () => {
+        modal.classList.add('hide');
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.add('hide');
+        }
+    });
+}
+
+function openImageViewer(url) {
+    const modal = document.getElementById('image-viewer-modal');
+    const img = document.getElementById('viewer-modal-img');
+    if (!modal || !img) return;
+
+    img.src = url;
+    modal.classList.remove('hide');
+}
+
+window.openImageViewer = openImageViewer;
+
+// =============================================================
+// Canvas Compression & Image OCR Engine (Tesseract.js)
+// =============================================================
+function compressImage(file, callback) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function (event) {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = function () {
+            const canvas = document.createElement('canvas');
+            const maxDimension = 800; // max width/height to keep size small
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > maxDimension) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                }
+            } else {
+                if (height > maxDimension) {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Compress to JPEG with 0.7 quality
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            callback(compressedBase64);
+        };
+    };
+}
+
+function setupImageUpload() {
+    setupSpecificImageUpload('full-upload-zone', 'full-image-input', 'full-image-preview-container', 'full-image-preview', 'full-remove-image-btn', 'full-ocr-status', 'transaction');
+    setupSpecificImageUpload('lending-upload-zone', 'lending-image-input', 'lending-image-preview-container', 'lending-image-preview', 'lending-remove-image-btn', 'lending-ocr-status', 'lending');
+}
+
+function setupSpecificImageUpload(zoneId, inputId, previewContainerId, previewImgId, removeBtnId, statusId, source) {
+    const uploadZone = document.getElementById(zoneId);
+    const fileInput = document.getElementById(inputId);
+    const previewContainer = document.getElementById(previewContainerId);
+    const previewImg = document.getElementById(previewImgId);
+    const removeBtn = document.getElementById(removeBtnId);
+    const statusIndicator = document.getElementById(statusId);
+
+    if (!uploadZone) return;
+
+    uploadZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        handleImageFile(file, uploadZone, previewContainer, previewImg, statusIndicator, source);
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.value = '';
+        previewContainer.classList.add('hide');
+        uploadZone.classList.remove('hide');
+        previewImg.src = '';
+        if (source === 'transaction') {
+            tempTransactionImage = null;
+        } else {
+            tempLendingImage = null;
+        }
+        showToast('ลบรูปภาพแนบแล้ว', 'info');
+    });
+
+    // Drag and Drop
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = 'var(--color-primary)';
+        uploadZone.style.background = 'rgba(139, 92, 246, 0.05)';
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.style.borderColor = 'rgba(139, 92, 246, 0.25)';
+        uploadZone.style.background = 'rgba(255, 255, 255, 0.01)';
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = 'rgba(139, 92, 246, 0.25)';
+        uploadZone.style.background = 'rgba(255, 255, 255, 0.01)';
+        
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            handleImageFile(file, uploadZone, previewContainer, previewImg, statusIndicator, source);
+        } else {
+            showToast('กรุณาอัปโหลดรูปภาพเท่านั้น', 'error');
+        }
+    });
+}
+
+function handleImageFile(file, uploadZone, previewContainer, previewImg, statusIndicator, source) {
+    showToast('กำลังบีบอัดรูปภาพ...');
+    compressImage(file, (compressedBase64) => {
+        // Show local compressed preview instantly
+        previewImg.src = compressedBase64;
+        uploadZone.classList.add('hide');
+        previewContainer.classList.remove('hide');
+
+        // Set temp holder to base64 initially as a fallback
+        if (source === 'transaction') {
+            tempTransactionImage = compressedBase64;
+        } else {
+            tempLendingImage = compressedBase64;
+        }
+
+        // Perform AI OCR scan
+        performOCR(compressedBase64, source, statusIndicator);
+
+        // Upload to cloud (Drive) if Sheets configured
+        if (googleSheetUrl) {
+            uploadImageToDrive(compressedBase64, source);
+        } else {
+            showToast('บันทึกรูปภาพชั่วคราวในบราวเซอร์ (แนะนำให้เชื่อมต่อตาราง Sheets เพื่อจัดเก็บถาวร)', 'info');
+        }
+    });
+}
+
+async function performOCR(base64Data, source, statusIndicator) {
+    if (!statusIndicator) return;
+    statusIndicator.classList.remove('hide');
+
+    try {
+        const { data: { text } } = await Tesseract.recognize(
+            base64Data,
+            'tha+eng',
+            { logger: m => console.log('Tesseract:', m.status, Math.round(m.progress * 100) + '%') }
+        );
+
+        console.log('OCR Text Result:', text);
+        const parsed = parseSlipText(text);
+
+        if (parsed.amount) {
+            if (source === 'transaction') {
+                document.getElementById('full-amount').value = parsed.amount;
+                showToast(`สแกนสลิปสำเร็จ! พบยอดเงิน ${formatCurrency(parsed.amount)}`);
+            } else {
+                document.getElementById('lending-amount').value = parsed.amount;
+                showToast(`สแกนสลิปสำเร็จ! พบยอดเงินยืม ${formatCurrency(parsed.amount)}`);
+            }
+        }
+
+        if (parsed.date) {
+            if (source === 'transaction') {
+                document.getElementById('full-date').value = parsed.date;
+            } else {
+                document.getElementById('lending-date').value = parsed.date;
+            }
+        }
+    } catch (error) {
+        console.error('OCR Error:', error);
+        showToast('ไม่สามารถสแกนข้อความได้ แต่บันทึกรูปภาพเรียบร้อยแล้วค่ะ', 'info');
+    } finally {
+        statusIndicator.classList.add('hide');
+    }
+}
+
+function parseSlipText(text) {
+    let amount = null;
+    let date = null;
+
+    // Clean up text
+    const cleanText = text.replace(/\s+/g, ' ');
+
+    // 1. Amount Extraction
+    const amountRegexes = [
+        /(?:จำนวนเงิน|ยอดเงิน|โอนเงิน|โอนเข้า|amount|amt|total)\s*[:\-\s]*\s*([0-9,]+\.[0-9]{2}|[0-9,]+)/i,
+        /([0-9,]+\.[0-9]{2}|[0-9,]+)\s*(?:บาท|thb|฿)/i,
+        /([0-9,]+\.[0-9]{2})/
+    ];
+
+    for (const regex of amountRegexes) {
+        const match = cleanText.match(regex);
+        if (match && match[1]) {
+            const val = parseFloat(match[1].replace(/,/g, ''));
+            if (!isNaN(val) && val > 0) {
+                amount = val;
+                break;
+            }
+        }
+    }
+
+    // 2. Date Extraction
+    const dateRegexes = [
+        /(\d{4})[-/](\d{2})[-/](\d{2})/,
+        /(\d{2})[-/](\d{2})[-/](\d{4})/,
+        /(\d{1,2})\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\s*(\d{2,4})/
+    ];
+
+    for (const regex of dateRegexes) {
+        const match = cleanText.match(regex);
+        if (match) {
+            // ISO YYYY-MM-DD
+            if (match[1].length === 4 && regex === dateRegexes[0]) {
+                date = `${match[1]}-${match[2]}-${match[3]}`;
+                break;
+            }
+            // DD/MM/YYYY or DD-MM-YYYY
+            if (match[3] && match[3].length === 4 && regex === dateRegexes[1]) {
+                let year = parseInt(match[3]);
+                if (year > 2400) year -= 543;
+                date = `${year}-${match[2]}-${match[1]}`;
+                break;
+            }
+            // Thai text month
+            if (match[1] && match[2]) {
+                const day = String(match[1]).padStart(2, '0');
+                let year = parseInt(match[2]);
+                if (year < 100) year += 2500; // 69 -> 2569
+                if (year > 2400) year -= 543; // BE to AD
+                
+                const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.', 
+                                    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+                let monthIdx = -1;
+                for (let i = 0; i < thaiMonths.length; i++) {
+                    if (cleanText.includes(thaiMonths[i])) {
+                        monthIdx = i % 12;
+                        break;
+                    }
+                }
+                if (monthIdx !== -1) {
+                    const monthStr = String(monthIdx + 1).padStart(2, '0');
+                    date = `${year}-${monthStr}-${day}`;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!date) {
+        date = getTodayDateString();
+    }
+
+    return { amount, date };
+}
+
+async function uploadImageToDrive(base64Data, source) {
+    if (!googleSheetUrl) return;
+
+    try {
+        const bodyData = {
+            action: 'uploadImage',
+            base64: base64Data
+        };
+
+        const response = await fetch(googleSheetUrl, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(bodyData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result && result.success && result.url) {
+            if (source === 'transaction') {
+                tempTransactionImage = result.url;
+            } else {
+                tempLendingImage = result.url;
+            }
+            showToast('อัปโหลดรูปภาพขึ้น Google Drive สำเร็จแล้ว!');
+        } else {
+            throw new Error(result.message || 'Drive upload returned success=false');
+        }
+    } catch (error) {
+        console.error('Drive upload error:', error);
+        showToast('ไม่สามารถเซฟขึ้น Google Drive ได้ จะบันทึกไว้ในเครื่องแทน', 'error');
     }
 }
