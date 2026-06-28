@@ -1820,27 +1820,52 @@ async function pullFromGoogleSheet(isManual = false) {
 
         const result = await response.json();
         if (result && result.success) {
-            // Update state variables and normalize transaction keys to lowercase
-            const rawTransactions = result.transactions || [];
-            transactions = rawTransactions.map(tx => {
+            // Key normalizer helper to handle Google Sheets "Convert to Table" auto-header renames (e.g. คอลัมน์ 1)
+            const normalizeKeys = (obj, type) => {
                 const normalized = {};
-                Object.keys(tx).forEach(key => {
-                    normalized[key.toLowerCase()] = tx[key];
-                });
-                if (normalized.amount) normalized.amount = parseFloat(normalized.amount) || 0;
-                return normalized;
-            });
+                const colMapping = type === 'transaction' ? {
+                    'คอลัมน์ 1': 'id', 'column 1': 'id',
+                    'คอลัมน์ 2': 'type', 'column 2': 'type',
+                    'คอลัมน์ 3': 'amount', 'column 3': 'amount',
+                    'คอลัมน์ 4': 'category', 'column 4': 'category',
+                    'คอลัมน์ 5': 'date', 'column 5': 'date',
+                    'คอลัมน์ 6': 'description', 'column 6': 'description',
+                    'คอลัมน์ 7': 'wallet', 'column 7': 'wallet',
+                    'คอลัมน์ 8': 'imageUrl', 'column 8': 'imageUrl'
+                } : {
+                    'คอลัมน์ 1': 'id', 'column 1': 'id',
+                    'คอลัมน์ 2': 'borrower', 'column 2': 'borrower',
+                    'คอลัมน์ 3': 'amount', 'column 3': 'amount',
+                    'คอลัมน์ 4': 'wallet', 'column 4': 'wallet',
+                    'คอลัมน์ 5': 'lentDate', 'column 5': 'lentDate',
+                    'คอลัมน์ 6': 'dueDate', 'column 6': 'dueDate',
+                    'คอลัมน์ 7': 'note', 'column 7': 'note',
+                    'คอลัมน์ 8': 'status', 'column 8': 'status',
+                    'คอลัมน์ 9': 'returnedDate', 'column 9': 'returnedDate',
+                    'คอลัมน์ 10': 'imageUrl', 'column 10': 'imageUrl'
+                };
 
-            // Normalize lending keys to lowercase
-            const rawLending = result.lending || [];
-            lending = rawLending.map(l => {
-                const normalized = {};
-                Object.keys(l).forEach(key => {
-                    normalized[key.toLowerCase()] = l[key];
+                Object.keys(obj).forEach(key => {
+                    const cleanKey = key.trim().toLowerCase();
+                    let mappedKey = colMapping[key.trim()] || colMapping[cleanKey] || cleanKey;
+                    if (mappedKey === 'imageurl') mappedKey = 'imageUrl';
+                    if (mappedKey === 'lentdate') mappedKey = 'lentDate';
+                    if (mappedKey === 'duedate') mappedKey = 'dueDate';
+                    if (mappedKey === 'returneddate') mappedKey = 'returnedDate';
+                    normalized[mappedKey] = obj[key];
                 });
+
                 if (normalized.amount) normalized.amount = parseFloat(normalized.amount) || 0;
                 return normalized;
-            });
+            };
+
+            // Update state variables and normalize transaction keys
+            const rawTransactions = result.transactions || [];
+            transactions = rawTransactions.map(tx => normalizeKeys(tx, 'transaction'));
+
+            // Normalize lending keys
+            const rawLending = result.lending || [];
+            lending = rawLending.map(l => normalizeKeys(l, 'lending'));
 
             startingCash = parseFloat(result.startingCash) || 0;
             startingBank = parseFloat(result.startingBank) || 0;
